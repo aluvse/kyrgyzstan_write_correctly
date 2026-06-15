@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Кыргызстан: Пишем правильно</title>
+        <link rel="stylesheet" href="popup.css" />
+        <script src="popupLogic.js" defer></script>
+    </head>
+    <body>
+        <div class="app-wrapper">
+            <h1 class="main-title">
+                МЫ
+                <img
+                    class="logo-icon"
+                    src="icon.svg"
+                    alt="logo"
+                    width="20"
+                    height="20"
+                />
+                <div class="wrong-name">КИРГИЗИЯ</div>
+                <div class="correct-name">КЫРГЫЗСТАН</div>
+            </h1>
+
+            <p class="info-text">
+                Согласно статье 1 Конституции КР:
+                <br />
+                <i
+                    >«Кыргызская Республика (Кыргызстан) — независимое,
+                    суверенное, демократическое, унитарное, правовое, светское и
+                    социальное государство».</i
+                >
+            </p>
+
+            <div class="toggle-container">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="switchInput" checked />
+                    <span class="toggle-slider toggle-round"></span>
+                </label>
+                <span class="toggle-label">Включить замену</span>
+            </div>
+
+            <p class="stats-text">
+                Исправлено слов: <b id="replaceCountDisplay">0</b>
+            </p>
+
+            <button id="disableSiteBtn" class="action-btn"></button>
+
+            <p class="footer-credits">
+                Разработано:
+                <a
+                    class="footer-link"
+                    href="https://t.me/aluvse"
+                    target="_blank"
+                    >Zhoodarbek</a
+                >
+            </p>
+        </div>
+    </body>
+</html>
