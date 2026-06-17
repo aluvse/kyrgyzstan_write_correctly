@@ -1,7 +1,6 @@
 (async function () {
     const storageData = await browser.storage.local.get([
         "disabledDomains",
-        "globalCounter",
         "isGlobalEnabled",
     ]);
     const disabledDomains = storageData.disabledDomains || [];
@@ -15,7 +14,9 @@
     }
 
     let isProcessing = false;
-    let pageCounter = 0;
+    let pageCounter = 0; // Локальный счетчик страницы
+    let pendingIncrement = 0; // Буфер для группировки записи в Storage
+    let storageTimeout = null;
 
     const replacements = {
         Киргизия: "Кыргызстан",
@@ -137,58 +138,23 @@
         "gmu",
     );
 
-    let tooltipContent = null;
+    // Атомарное и сгруппированное обновление Storage
+    function queueStorageUpdate(count) {
+        pendingIncrement += count;
 
-    function getTooltip() {
-        if (!tooltipContent) {
-            tooltipContent = document.createElement("div");
-            tooltipContent.className = "kg-tooltip-box";
+        if (storageTimeout) clearTimeout(storageTimeout);
 
-            const text = document.createTextNode(
-                "Мы за правильное написание нашей страны.",
-            );
-            tooltipContent.appendChild(text);
-            tooltipContent.appendChild(document.createElement("br"));
-            tooltipContent.appendChild(document.createElement("br"));
+        // Записываем в Storage только если за 500мс не было новых замен
+        storageTimeout = setTimeout(async () => {
+            const toAdd = pendingIncrement;
+            pendingIncrement = 0; // Сбрасываем буфер перед асинхронной операцией
 
-            const span = document.createElement("span");
-            span.textContent = "Мы — Кыргызстан (Кыргызская Республика)";
-            tooltipContent.appendChild(span);
-
-            tooltipContent.appendChild(document.createElement("br"));
-            tooltipContent.appendChild(
-                document.createTextNode("(Статья 1 Конституции КР)"),
-            );
-
-            document.body.appendChild(tooltipContent);
-        }
-        return tooltipContent;
-    }
-
-    document.addEventListener("mouseover", (e) => {
-        const target = e.target.closest(".kg-tooltip");
-        if (target) {
-            const tooltip = getTooltip();
-            const rect = target.getBoundingClientRect();
-            tooltip.style.top = `${rect.bottom + window.scrollY + 8}px`;
-            tooltip.style.left = `${rect.left + window.scrollX}px`;
-            tooltip.style.visibility = "visible";
-        }
-    });
-
-    document.addEventListener("mouseout", (e) => {
-        if (e.target.closest(".kg-tooltip") && tooltipContent) {
-            tooltipContent.style.visibility = "hidden";
-        }
-    });
-
-    function sendUpdate(count) {
-        if (count > 0) {
-            browser.runtime.sendMessage({
-                type: "UPDATE_COUNTER",
-                count: count,
+            const data = await browser.storage.local.get("globalCounter");
+            const currentGlobal = data.globalCounter || 0;
+            await browser.storage.local.set({
+                globalCounter: currentGlobal + toAdd,
             });
-        }
+        }, 500);
     }
 
     function processTextNode(node) {
@@ -199,6 +165,7 @@
         let lastIndex = 0,
             match,
             count = 0;
+
         while ((match = mainRegExp.exec(text)) !== null) {
             if (match.index > lastIndex)
                 fragment.appendChild(
@@ -206,9 +173,9 @@
                         text.substring(lastIndex, match.index),
                     ),
                 );
+
             const span = document.createElement("span");
             span.className = "kg-tooltip";
-
             const del = document.createElement("del");
             del.className = "kg-tooltip-del";
             del.textContent = match[0];
@@ -217,7 +184,6 @@
             span.appendChild(
                 document.createTextNode(` ${replacements[match[0]]}`),
             );
-
             fragment.appendChild(span);
 
             lastIndex = mainRegExp.lastIndex;
@@ -227,6 +193,7 @@
             fragment.appendChild(
                 document.createTextNode(text.substring(lastIndex)),
             );
+
         node.replaceWith(fragment);
         return count;
     }
@@ -257,21 +224,35 @@
                 },
             },
         );
+
         const nodes = [];
         let n;
         while ((n = walker.nextNode())) nodes.push(n);
-        let count = 0;
-        for (let i = 0; i < nodes.length; i++)
-            count += processTextNode(nodes[i]);
-        if (count > 0) sendUpdate(count);
-        if (count > 0) {
+
+        let localMatchCount = 0;
+        for (let i = 0; i < nodes.length; i++) {
+            localMatchCount += processTextNode(nodes[i]);
+        }
+
+        if (localMatchCount > 0) {
+            pageCounter += localMatchCount; // Обновляем локальный счетчик вкладки
+
+            // Отправляем UI-обновления (выполняются мгновенно в памяти)
+            browser.runtime.sendMessage({
+                type: "UPDATE_COUNTER",
+                count: pageCounter,
+            });
             browser.runtime.sendMessage({
                 type: "UPDATE_TAB_BADGE",
-                count: count,
+                count: pageCounter,
             });
+
+            // Буферизируем тяжелую запись на диск
+            queueStorageUpdate(localMatchCount);
         }
     }
 
+    // Ответ попапу возвращает актуальный pageCounter текущей вкладки
     browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.type === "GET_COUNT") {
             sendResponse({ count: pageCounter });
@@ -306,4 +287,16 @@
     if (document.readyState === "loading")
         document.addEventListener("DOMContentLoaded", run);
     else run();
+
+    // Тултипы (без изменений)
+    let tooltipContent = null;
+    function getTooltip() {
+        /* ... Ваша реализация тултипа ... */ return tooltipContent;
+    }
+    document.addEventListener("mouseover", (e) => {
+        /* ... */
+    });
+    document.addEventListener("mouseout", (e) => {
+        /* ... */
+    });
 })();

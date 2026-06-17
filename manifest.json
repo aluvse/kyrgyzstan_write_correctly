@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Kyrgyzstan: Write Correctly",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "permissions": ["storage", "tabs"],
     "action": {
         "default_popup": "popup.html",

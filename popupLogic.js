@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
-    const [tab] = await chrome.tabs.query({
+    // Используем browser вместо chrome для Firefox
+    const [tab] = await browser.tabs.query({
         active: true,
         currentWindow: true,
     });
@@ -7,6 +8,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (
         !tab ||
         !tab.url ||
+        tab.url.startsWith("about:") || // Для Firefox служебные страницы начинаются с about:
         tab.url.startsWith("chrome://") ||
         tab.url.startsWith("edge://")
     ) {
@@ -28,27 +30,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     const disableSiteBtn = document.getElementById("disableSiteBtn");
     const switchInput = document.getElementById("switchInput");
 
-    const data = await chrome.storage.local.get([
-        "globalCounter",
+    // Запрашиваем настройки из общего хранилища browser
+    const data = await browser.storage.local.get([
         "disabledDomains",
         "isGlobalEnabled",
     ]);
 
-    const count = data.globalCounter || 0;
     let disabledDomains = data.disabledDomains || [];
     let isGlobalEnabled = data.isGlobalEnabled !== false;
 
+    // Выводим счетчик: сначала запрашиваем локальный у контент-скрипта,
+    // если вкладка не отвечает (например, скрипт еще не загрузился) — пишем 0.
     if (counterDisplay) {
-        counterDisplay.textContent = count;
+        try {
+            const response = await browser.tabs.sendMessage(tab.id, {
+                type: "GET_COUNT",
+            });
+            counterDisplay.textContent = response ? response.count : 0;
+        } catch (error) {
+            // Контент-скрипт еще не инициализирован или страница не поддерживает скрипты
+            counterDisplay.textContent = 0;
+        }
     }
 
     if (switchInput) {
         switchInput.checked = isGlobalEnabled;
         switchInput.addEventListener("change", async (e) => {
-            await chrome.storage.local.set({
+            await browser.storage.local.set({
                 isGlobalEnabled: e.target.checked,
             });
-            chrome.tabs.reload(tab.id);
+            browser.tabs.reload(tab.id);
         });
     }
 
@@ -76,10 +87,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 disabledDomains.push(currentHost);
             }
 
-            await chrome.storage.local.set({ disabledDomains });
+            await browser.storage.local.set({ disabledDomains });
             updateButtonState();
 
-            chrome.tabs.reload(tab.id);
+            browser.tabs.reload(tab.id);
         });
     }
 });
